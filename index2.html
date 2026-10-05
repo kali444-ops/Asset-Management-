@@ -1,0 +1,454 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>AssetPulse - Enterprise IT Asset Management</title>
+    <!-- Tailwind CSS CDN -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- Chart.js CDN -->
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <!-- Inter Font & Animation Keyframes -->
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
+    <style>
+        body { font-family: 'Inter', sans-serif; }
+
+        @keyframes fadeIn {
+            from { opacity: 0; transform: translateY(12px) scale(0.98); }
+            to { opacity: 1; transform: translateY(0) scale(1); }
+        }
+
+        @keyframes floatBlob {
+            0%, 100% { transform: translate(0px, 0px) scale(1); }
+            50% { transform: translate(30px, -40px) scale(1.1); }
+        }
+
+        .animate-fade-in {
+            animation: fadeIn 0.45s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+        }
+
+        .blob-1 {
+            animation: floatBlob 8s ease-in-out infinite;
+        }
+
+        .blob-2 {
+            animation: floatBlob 10s ease-in-out infinite reverse;
+        }
+
+        /* Custom Scrollbar */
+        ::-webkit-scrollbar { width: 8px; height: 8px; }
+        ::-webkit-scrollbar-track { background: #f1f5f9; }
+        ::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 4px; }
+        ::-webkit-scrollbar-thumb:hover { background: #94a3b8; }
+    </style>
+</head>
+<body class="bg-gradient-to-br from-slate-50 via-indigo-50/30 to-violet-50/40 text-slate-800 antialiased min-h-screen flex flex-col selection:bg-indigo-600 selection:text-white relative overflow-x-hidden">
+
+    <!-- Modern Animated Gradient Background Blobs -->
+    <div class="absolute top-0 left-0 w-full h-full overflow-hidden pointer-events-none z-0">
+        <div class="blob-1 absolute -top-32 -left-32 w-96 h-96 bg-indigo-400/20 rounded-full blur-[100px]"></div>
+        <div class="blob-2 absolute top-1/4 -right-24 w-[28rem] h-[28rem] bg-violet-400/20 rounded-full blur-[120px]"></div>
+        <div class="blob-1 absolute -bottom-32 left-1/3 w-[26rem] h-[26rem] bg-emerald-400/15 rounded-full blur-[110px]"></div>
+    </div>
+
+    <!-- App Container -->
+    <div id="app" class="flex-grow flex flex-col relative z-10">
+        <div id="main-view" class="flex-grow flex items-center justify-center p-4">
+            <!-- Dynamic View Rendered Here -->
+        </div>
+    </div>
+
+    <!-- Application JavaScript Logic -->
+    <script>
+        let currentUser = JSON.parse(localStorage.getItem('itam_user')) || null;
+        let registeredEmployees = JSON.parse(localStorage.getItem('itam_employees')) || {};
+        let assets = JSON.parse(localStorage.getItem('itam_assets')) || [
+            { id: 1, employeeName: 'Sarah Jenkins', name: 'Dell UltraSharp 24"', category: 'Displays', quantity: 23, status: 'Operational', registeredBy: 'admin@company.com' },
+            { id: 2, employeeName: 'Alex Rivera', name: 'MacBook Pro 16"', category: 'Computers', quantity: 10, status: 'In Maintenance', registeredBy: 'admin@company.com' }
+        ];
+
+        let categoryChartInstance = null;
+        let quantityChartInstance = null;
+        let maintenanceChartInstance = null;
+
+        function saveData() {
+            localStorage.setItem('itam_assets', JSON.stringify(assets));
+            localStorage.setItem('itam_user', JSON.stringify(currentUser));
+            localStorage.setItem('itam_employees', JSON.stringify(registeredEmployees));
+        }
+
+        function handleAuth(e) {
+            e.preventDefault();
+            const fullName = document.getElementById('auth-name').value.trim();
+            const email = document.getElementById('auth-email').value.trim().toLowerCase();
+            const role = document.getElementById('auth-role').value;
+            
+            if (!fullName) {
+                alert('Please enter your full employee name.');
+                return;
+            }
+
+            // Save or update employee name record
+            registeredEmployees[email] = fullName;
+
+            currentUser = { email, role, name: fullName };
+            saveData();
+            renderDashboard();
+        }
+
+        function logout() {
+            currentUser = null;
+            localStorage.removeItem('itam_user');
+            renderLogin();
+        }
+
+        function renderLogin() {
+            document.getElementById('main-view').innerHTML = `
+                <div class="bg-white/80 backdrop-blur-2xl p-8 md:p-10 rounded-3xl shadow-2xl shadow-indigo-600/10 border border-white/80 w-full max-w-md animate-fade-in m-auto relative">
+                    <!-- Accent top glow line -->
+                    <div class="absolute top-0 left-1/2 -translate-x-1/2 w-32 h-1 bg-gradient-to-r from-indigo-500 to-violet-500 rounded-full"></div>
+                    
+                    <div class="text-center mb-8">
+                        <div class="inline-flex items-center justify-center w-16 h-16 bg-gradient-to-br from-indigo-600 to-violet-600 text-white rounded-2xl mb-4 font-black text-2xl shadow-lg shadow-indigo-600/30 transform hover:scale-105 transition-transform duration-300">AP</div>
+                        <h1 class="text-2xl font-extrabold text-slate-900 tracking-tight">AssetPulse</h1>
+                        <p class="text-xs font-semibold text-slate-400 mt-1 uppercase tracking-widest">Enterprise IT Inventory & Maintenance</p>
+                    </div>
+                    
+                    <form onsubmit="handleAuth(event)" class="space-y-4">
+                        <div>
+                            <label class="block text-xs font-bold uppercase tracking-wider text-slate-700 mb-1.5">Full Name *</label>
+                            <input type="text" id="auth-name" required class="w-full px-4 py-3 bg-slate-50/80 border border-slate-200 rounded-xl text-sm text-slate-900 placeholder-slate-400 focus:bg-white focus:border-indigo-600 focus:ring-4 focus:ring-indigo-600/10 focus:outline-none transition-all" placeholder="e.g. John Doe">
+                        </div>
+                        <div>
+                            <label class="block text-xs font-bold uppercase tracking-wider text-slate-700 mb-1.5">Corporate Email *</label>
+                            <input type="email" id="auth-email" required class="w-full px-4 py-3 bg-slate-50/80 border border-slate-200 rounded-xl text-sm text-slate-900 placeholder-slate-400 focus:bg-white focus:border-indigo-600 focus:ring-4 focus:ring-indigo-600/10 focus:outline-none transition-all" placeholder="name@company.com">
+                        </div>
+                        <div>
+                            <label class="block text-xs font-bold uppercase tracking-wider text-slate-700 mb-1.5">Access Password *</label>
+                            <input type="password" id="auth-password" required class="w-full px-4 py-3 bg-slate-50/80 border border-slate-200 rounded-xl text-sm text-slate-900 placeholder-slate-400 focus:bg-white focus:border-indigo-600 focus:ring-4 focus:ring-indigo-600/10 focus:outline-none transition-all" placeholder="••••••••">
+                        </div>
+                        <div>
+                            <label class="block text-xs font-bold uppercase tracking-wider text-slate-700 mb-1.5">System Role *</label>
+                            <select id="auth-role" class="w-full px-4 py-3 bg-slate-50/80 border border-slate-200 rounded-xl text-sm text-slate-900 focus:bg-white focus:border-indigo-600 focus:ring-4 focus:ring-indigo-600/10 focus:outline-none transition-all">
+                                <option value="employee">Employee / Asset Requester</option>
+                                <option value="admin">System Administrator</option>
+                            </select>
+                        </div>
+                        <button type="submit" class="w-full bg-gradient-to-r from-indigo-600 to-violet-600 text-white py-3.5 rounded-xl font-bold text-sm hover:from-indigo-500 hover:to-violet-500 active:scale-[0.99] shadow-lg shadow-indigo-600/25 transition-all duration-300 mt-2 cursor-pointer">Sign In or Register</button>
+                    </form>
+                    <div class="mt-6 text-center text-xs text-slate-400">
+                        Protected with secure local storage validation.
+                    </div>
+                </div>
+            `;
+        }
+
+        function renderDashboard() {
+            if (!currentUser) {
+                renderLogin();
+                return;
+            }
+
+            const isAdmin = currentUser.role === 'admin';
+            const totalUnits = assets.reduce((sum, a) => sum + a.quantity, 0);
+            const inMaintenanceCount = assets.filter(a => a.status === 'In Maintenance').reduce((sum, a) => sum + a.quantity, 0);
+            const totalCategories = new Set(assets.map(a => a.category)).size;
+
+            document.getElementById('main-view').innerHTML = `
+                <div class="w-full max-w-7xl mx-auto p-4 md:p-8 flex flex-col gap-6 animate-fade-in">
+                    <!-- Top Navigation Bar -->
+                    <div class="bg-white/80 backdrop-blur-2xl p-5 rounded-3xl shadow-xl shadow-slate-200/50 border border-white/80 flex flex-col sm:flex-row justify-between items-center gap-4 transition hover:shadow-2xl">
+                        <div class="flex items-center gap-3.5">
+                            <div class="w-12 h-12 bg-gradient-to-br from-indigo-600 to-violet-600 text-white font-black rounded-2xl flex items-center justify-center text-lg shadow-lg shadow-indigo-600/30">AP</div>
+                            <div>
+                                <h1 class="text-base font-extrabold text-slate-900">${currentUser.name} <span class="text-xs font-normal text-slate-400">(${currentUser.email})</span></h1>
+                                <span class="inline-block px-3 py-0.5 bg-indigo-50 border border-indigo-100 text-indigo-700 text-xs font-bold uppercase tracking-wider rounded-full mt-0.5">${currentUser.role}</span>
+                            </div>
+                        </div>
+                        <button onclick="logout()" class="px-4 py-2.5 bg-slate-100/80 hover:bg-red-50 hover:border-red-200 hover:text-red-600 text-slate-700 rounded-xl text-sm font-semibold border border-slate-200/60 transition-all duration-300 cursor-pointer">Sign Out</button>
+                    </div>
+
+                    <!-- Metric Cards (Admin Only) -->
+                    ${isAdmin ? `
+                    <div class="grid grid-cols-1 sm:grid-cols-4 gap-4">
+                        <div class="bg-white/80 backdrop-blur-2xl p-6 rounded-3xl shadow-xl shadow-slate-200/50 border border-white/80 hover:shadow-2xl transition duration-300 group">
+                            <p class="text-xs font-bold uppercase tracking-wider text-slate-400 group-hover:text-indigo-600 transition-colors">Total Records</p>
+                            <h3 class="text-3xl font-black text-slate-900 mt-2">${assets.length}</h3>
+                        </div>
+                        <div class="bg-white/80 backdrop-blur-2xl p-6 rounded-3xl shadow-xl shadow-slate-200/50 border border-white/80 hover:shadow-2xl transition duration-300 group">
+                            <p class="text-xs font-bold uppercase tracking-wider text-slate-400 group-hover:text-indigo-600 transition-colors">Total Units</p>
+                            <h3 class="text-3xl font-black text-indigo-600 mt-2">${totalUnits}</h3>
+                        </div>
+                        <div class="bg-white/80 backdrop-blur-2xl p-6 rounded-3xl shadow-xl shadow-slate-200/50 border border-white/80 hover:shadow-2xl transition duration-300 group">
+                            <p class="text-xs font-bold uppercase tracking-wider text-amber-600">In Maintenance</p>
+                            <h3 class="text-3xl font-black text-amber-600 mt-2">${inMaintenanceCount}</h3>
+                        </div>
+                        <div class="bg-white/80 backdrop-blur-2xl p-6 rounded-3xl shadow-xl shadow-slate-200/50 border border-white/80 hover:shadow-2xl transition duration-300 group">
+                            <p class="text-xs font-bold uppercase tracking-wider text-slate-400 group-hover:text-indigo-600 transition-colors">Categories</p>
+                            <h3 class="text-3xl font-black text-slate-900 mt-2">${totalCategories}</h3>
+                        </div>
+                    </div>
+
+                    <!-- Charts Grid -->
+                    <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
+                        <div class="bg-white/80 backdrop-blur-2xl p-6 rounded-3xl shadow-xl shadow-slate-200/50 border border-white/80">
+                            <h3 class="text-xs font-bold uppercase tracking-wider text-slate-500 mb-4">Category Share</h3>
+                            <div class="relative h-64 flex justify-center">
+                                <canvas id="categoryChart"></canvas>
+                            </div>
+                        </div>
+                        <div class="bg-white/80 backdrop-blur-2xl p-6 rounded-3xl shadow-xl shadow-slate-200/50 border border-white/80">
+                            <h3 class="text-xs font-bold uppercase tracking-wider text-slate-500 mb-4">Device Volumes</h3>
+                            <div class="relative h-64 flex justify-center">
+                                <canvas id="quantityChart"></canvas>
+                            </div>
+                        </div>
+                        <div class="bg-white/80 backdrop-blur-2xl p-6 rounded-3xl shadow-xl shadow-slate-200/50 border border-white/80">
+                            <h3 class="text-xs font-bold uppercase tracking-wider text-slate-500 mb-4">Maintenance Status</h3>
+                            <div class="relative h-64 flex justify-center">
+                                <canvas id="maintenanceChart"></canvas>
+                            </div>
+                        </div>
+                    </div>` : ''}
+
+                    <!-- Secure Device Registration Form -->
+                    <div class="bg-white/80 backdrop-blur-2xl p-6 md:p-8 rounded-3xl shadow-xl shadow-slate-200/50 border border-white/80">
+                        <div class="mb-5">
+                            <h2 class="text-lg font-extrabold text-slate-900">Secure Device Registration</h2>
+                            <p class="text-xs text-slate-500 mt-0.5">Please provide asset details, assigned employee, and operational status.</p>
+                        </div>
+                        <form onsubmit="handleRegisterDevice(event)" class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-6 gap-4">
+                            <div>
+                                <label class="block text-xs font-bold uppercase tracking-wider text-slate-700 mb-1.5">Employee Name *</label>
+                                <input type="text" id="dev-emp" value="${currentUser.name}" required class="w-full px-3.5 py-2.5 bg-slate-50/80 border border-slate-200 rounded-xl text-sm text-slate-900 placeholder-slate-400 focus:bg-white focus:border-indigo-600 focus:ring-4 focus:ring-indigo-600/10 focus:outline-none transition" placeholder="e.g. John Doe">
+                            </div>
+                            <div>
+                                <label class="block text-xs font-bold uppercase tracking-wider text-slate-700 mb-1.5">Device Name *</label>
+                                <input type="text" id="dev-name" required class="w-full px-3.5 py-2.5 bg-slate-50/80 border border-slate-200 rounded-xl text-sm text-slate-900 placeholder-slate-400 focus:bg-white focus:border-indigo-600 focus:ring-4 focus:ring-indigo-600/10 focus:outline-none transition" placeholder="e.g. Dell Monitor">
+                            </div>
+                            <div>
+                                <label class="block text-xs font-bold uppercase tracking-wider text-slate-700 mb-1.5">Category *</label>
+                                <input type="text" id="dev-cat" required class="w-full px-3.5 py-2.5 bg-slate-50/80 border border-slate-200 rounded-xl text-sm text-slate-900 placeholder-slate-400 focus:bg-white focus:border-indigo-600 focus:ring-4 focus:ring-indigo-600/10 focus:outline-none transition" placeholder="e.g. Displays">
+                            </div>
+                            <div>
+                                <label class="block text-xs font-bold uppercase tracking-wider text-slate-700 mb-1.5">Quantity *</label>
+                                <input type="number" id="dev-qty" min="1" required class="w-full px-3.5 py-2.5 bg-slate-50/80 border border-slate-200 rounded-xl text-sm text-slate-900 placeholder-slate-400 focus:bg-white focus:border-indigo-600 focus:ring-4 focus:ring-indigo-600/10 focus:outline-none transition" placeholder="e.g. 23">
+                            </div>
+                            <div>
+                                <label class="block text-xs font-bold uppercase tracking-wider text-slate-700 mb-1.5">Status *</label>
+                                <select id="dev-status" class="w-full px-3.5 py-2.5 bg-slate-50/80 border border-slate-200 rounded-xl text-sm text-slate-900 focus:bg-white focus:border-indigo-600 focus:ring-4 focus:ring-indigo-600/10 focus:outline-none transition">
+                                    <option value="Operational">Operational</option>
+                                    <option value="In Maintenance">In Maintenance</option>
+                                    <option value="Decommissioned">Decommissioned</option>
+                                </select>
+                            </div>
+                            <div class="flex items-end">
+                                <button type="submit" class="w-full bg-gradient-to-r from-emerald-600 to-teal-600 text-white py-2.5 rounded-xl font-bold text-sm hover:from-emerald-500 hover:to-teal-500 active:scale-[0.99] shadow-lg shadow-emerald-600/20 transition-all duration-300 cursor-pointer">Register Asset</button>
+                            </div>
+                        </form>
+                    </div>
+
+                    <!-- Inventory Table Section -->
+                    <div class="bg-white/80 backdrop-blur-2xl p-6 md:p-8 rounded-3xl shadow-xl shadow-slate-200/50 border border-white/80">
+                        <h2 class="text-lg font-extrabold text-slate-900 mb-4">Enterprise Inventory Registry</h2>
+                        <div class="overflow-x-auto">
+                            <table class="w-full text-left border-collapse">
+                                <thead>
+                                    <tr class="border-b border-slate-100 text-xs font-bold uppercase tracking-wider text-slate-400">
+                                        <th class="py-3.5 px-4">Employee Assigned</th>
+                                        <th class="py-3.5 px-4">Device Name</th>
+                                        <th class="py-3.5 px-4">Category</th>
+                                        <th class="py-3.5 px-4">Quantity</th>
+                                        <th class="py-3.5 px-4">Status</th>
+                                        <th class="py-3.5 px-4">Logged By</th>
+                                        ${isAdmin ? '<th class="py-3.5 px-4 text-right">Admin Actions</th>' : ''}
+                                    </tr>
+                                </thead>
+                                <tbody id="asset-table-body" class="text-sm text-slate-700 divide-y divide-slate-100">
+                                    <!-- Dynamic Rows -->
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+            `;
+            updateTable();
+            if (isAdmin) {
+                renderCharts();
+            }
+        }
+
+        function handleRegisterDevice(e) {
+            e.preventDefault();
+            const employeeName = document.getElementById('dev-emp').value.trim();
+            const name = document.getElementById('dev-name').value.trim();
+            const category = document.getElementById('dev-cat').value.trim();
+            const quantity = parseInt(document.getElementById('dev-qty').value);
+            const status = document.getElementById('dev-status').value;
+
+            assets.push({ id: Date.now(), employeeName, name, category, quantity, status, registeredBy: currentUser.email });
+            saveData();
+            renderDashboard();
+            alert('Device successfully registered with maintenance status tracking!');
+        }
+
+        function deleteAsset(id) {
+            if (confirm('Are you sure you want to delete this asset record from inventory?')) {
+                assets = assets.filter(a => a.id !== id);
+                saveData();
+                renderDashboard();
+            }
+        }
+
+        function editAsset(id) {
+            const asset = assets.find(a => a.id === id);
+            if (!asset) return;
+
+            const newEmp = prompt('Edit Employee Name:', asset.employeeName);
+            if (newEmp === null) return;
+            const newName = prompt('Edit Device Name:', asset.name);
+            if (newName === null) return;
+            const newCat = prompt('Edit Category:', asset.category);
+            if (newCat === null) return;
+            const newQty = prompt('Edit Quantity:', asset.quantity);
+            if (newQty === null) return;
+            const newStatus = prompt('Edit Status (Operational / In Maintenance / Decommissioned):', asset.status || 'Operational');
+            if (newStatus === null) return;
+
+            asset.employeeName = newEmp.trim() || asset.employeeName;
+            asset.name = newName.trim() || asset.name;
+            asset.category = newCat.trim() || asset.category;
+            asset.quantity = parseInt(newQty) || asset.quantity;
+            asset.status = newStatus.trim() || asset.status;
+
+            saveData();
+            renderDashboard();
+        }
+
+        function updateTable() {
+            const tbody = document.getElementById('asset-table-body');
+            if (!tbody) return;
+            const isAdmin = currentUser.role === 'admin';
+
+            tbody.innerHTML = assets.map(a => {
+                let statusBadge = '';
+                if (a.status === 'Operational') {
+                    statusBadge = `<span class="px-2.5 py-1 bg-emerald-50 border border-emerald-200 text-emerald-700 text-xs font-bold rounded-lg">Operational</span>`;
+                } else if (a.status === 'In Maintenance') {
+                    statusBadge = `<span class="px-2.5 py-1 bg-amber-50 border border-amber-200 text-amber-700 text-xs font-bold rounded-lg">In Maintenance</span>`;
+                } else {
+                    statusBadge = `<span class="px-2.5 py-1 bg-red-50 border border-red-200 text-red-700 text-xs font-bold rounded-lg">Decommissioned</span>`;
+                }
+
+                return `
+                <tr class="hover:bg-slate-50/80 transition-colors">
+                    <td class="py-4 px-4 font-bold text-slate-900">${a.employeeName}</td>
+                    <td class="py-4 px-4 font-medium">${a.name}</td>
+                    <td class="py-4 px-4"><span class="px-2.5 py-1 bg-slate-100 text-slate-700 text-xs font-bold rounded-lg border border-slate-200/60">${a.category}</span></td>
+                    <td class="py-4 px-4 font-black text-indigo-600">${a.quantity}</td>
+                    <td class="py-4 px-4">${statusBadge}</td>
+                    <td class="py-4 px-4 text-slate-400 text-xs">${a.registeredBy}</td>
+                    ${isAdmin ? `
+                    <td class="py-4 px-4 text-right space-x-2">
+                        <button onclick="editAsset(${a.id})" class="px-3 py-1.5 bg-amber-50 hover:bg-amber-100 border border-amber-200 text-amber-700 font-bold rounded-xl text-xs transition cursor-pointer">Edit</button>
+                        <button onclick="deleteAsset(${a.id})" class="px-3 py-1.5 bg-red-50 hover:bg-red-100 border border-red-200 text-red-600 font-bold rounded-xl text-xs transition cursor-pointer">Delete</button>
+                    </td>` : ''}
+                </tr>
+            `;
+            }).join('');
+        }
+
+        function renderCharts() {
+            const categoryData = {};
+            const deviceLabels = [];
+            const deviceQuantities = [];
+            const maintenanceData = { 'Operational': 0, 'In Maintenance': 0, 'Decommissioned': 0 };
+
+            assets.forEach(a => {
+                categoryData[a.category] = (categoryData[a.category] || 0) + a.quantity;
+                deviceLabels.push(a.name);
+                deviceQuantities.push(a.quantity);
+                const stat = a.status || 'Operational';
+                maintenanceData[stat] = (maintenanceData[stat] || 0) + a.quantity;
+            });
+
+            if (categoryChartInstance) categoryChartInstance.destroy();
+            if (quantityChartInstance) quantityChartInstance.destroy();
+            if (maintenanceChartInstance) maintenanceChartInstance.destroy();
+
+            // Chart.js global light theme defaults
+            Chart.defaults.color = '#64748b';
+            Chart.defaults.borderColor = '#f1f5f9';
+
+            // Render Doughnut Chart for Categories
+            const ctxPie = document.getElementById('categoryChart').getContext('2d');
+            categoryChartInstance = new Chart(ctxPie, {
+                type: 'doughnut',
+                data: {
+                    labels: Object.keys(categoryData),
+                    datasets: [{
+                        data: Object.values(categoryData),
+                        backgroundColor: ['#6366f1', '#10b981', '#f59e0b', '#ec4899', '#8b5cf6'],
+                        borderWidth: 0
+                    }]
+                },
+                options: { 
+                    responsive: true, 
+                    maintainAspectRatio: false,
+                    plugins: { legend: { position: 'bottom', labels: { boxWidth: 10, font: { family: 'Inter', size: 10, weight: '600' } } } }
+                }
+            });
+
+            // Render Bar Chart for Volumes
+            const ctxBar = document.getElementById('quantityChart').getContext('2d');
+            quantityChartInstance = new Chart(ctxBar, {
+                type: 'bar',
+                data: {
+                    labels: deviceLabels,
+                    datasets: [{
+                        label: 'Units',
+                        data: deviceQuantities,
+                        backgroundColor: '#6366f1',
+                        borderRadius: 6
+                    }]
+                },
+                options: { 
+                    responsive: true, 
+                    maintainAspectRatio: false,
+                    plugins: { legend: { display: false } },
+                    scales: { 
+                        y: { beginAtZero: true, grid: { color: '#f1f5f9' }, ticks: { font: { family: 'Inter', size: 10, weight: '600' } } },
+                        x: { grid: { display: false }, ticks: { font: { family: 'Inter', size: 10, weight: '600' } } }
+                    }
+                }
+            });
+
+            // Render Pie Chart for Maintenance Status
+            const ctxMaint = document.getElementById('maintenanceChart').getContext('2d');
+            maintenanceChartInstance = new Chart(ctxMaint, {
+                type: 'pie',
+                data: {
+                    labels: Object.keys(maintenanceData),
+                    datasets: [{
+                        data: Object.values(maintenanceData),
+                        backgroundColor: ['#10b981', '#f59e0b', '#ef4444'],
+                        borderWidth: 0
+                    }]
+                },
+                options: { 
+                    responsive: true, 
+                    maintainAspectRatio: false,
+                    plugins: { legend: { position: 'bottom', labels: { boxWidth: 10, font: { family: 'Inter', size: 10, weight: '600' } } } }
+                }
+            });
+        }
+
+        // Initialize state on load
+        if (currentUser) {
+            renderDashboard();
+        } else {
+            renderLogin();
+        }
+    </script>
+</body>
+</html>
